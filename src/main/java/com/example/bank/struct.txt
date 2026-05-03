@@ -1,0 +1,9 @@
+com.example.bank
+├── config                 # 配置类层
+├── controller             # 表现层 (API 接口)
+├── dto                    # 数据传输对象 (Request/Response)
+├── entity                 # 领域模型 (数据库映射)
+├── exception              # 异常处理
+├── repository             # 数据访问层 (DAO)
+├── service                # 业务逻辑层
+└── BankApplication.java   # 启动类

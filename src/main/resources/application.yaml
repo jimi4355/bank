@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    # 因为数据库在 Windows，WSL2 访问 Windows 建议用 localhost
+    # 如果 localhost 不行，可能需要用 Windows 的真实 IP
+    url: jdbc:postgresql://localhost:5432/bank_db
+    username: jimi
+    password: 123456
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    show-sql: true # 严谨建议：在控制台看每一行 Java 代码变成了什么 SQL
+    hibernate:
+      ddl-auto: update
+#      ddl-auto: validate # 严谨建议：生产环境永远用 validate，只检查不修改表结构
+    properties:
+      hibernate:
+        format_sql: true # 让打印出来的 SQL 易于阅读
