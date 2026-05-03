@@ -25,12 +25,14 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf.disable()) // 必须禁用 CSRF 才能支持 WebSocket 握手
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/user/register", "/user/login").permitAll()
-                        .anyRequest().authenticated() // 除了注册登录，其余全都要 Token
+                        // 1. 在这里添加 WebSocket 的放行路径
+                        .requestMatchers("/user/register", "/user/login", "/bank-websocket/**").permitAll()
+                        // 2. 这里的 anyRequest 包括了所有没在上面定义的路径，都需要 Token
+                        .anyRequest().authenticated()
                 )
-                // 关键：把 JWT 保安安插在标准的用户名密码验证过滤器之前
+                // 3. 将 JWT 过滤器放在标准验证过滤器之前
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
