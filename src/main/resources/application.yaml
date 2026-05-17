@@ -3,7 +3,7 @@ spring:
     # 因为数据库在 Windows，WSL2 访问 Windows 建议用 localhost
     # 如果 localhost 不行，可能需要用 Windows 的真实 IP
     url: jdbc:postgresql://localhost:5432/bank_db
-    username: jimi
+    username: trump
     password: 123456
     driver-class-name: org.postgresql.Driver
 
