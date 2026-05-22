@@ -1,17 +1,24 @@
 package com.example.bank.service;
 
+
 import com.example.bank.entity.Account;
+import com.example.bank.entity.CreditBill;
 import com.example.bank.entity.CreditCard;
 import com.example.bank.entity.TransactionType;
 import com.example.bank.exception.BusinessException;
+import com.example.bank.repository.AccountRepository;
+import com.example.bank.repository.CreditBillRepository;
 import com.example.bank.repository.CreditCardRepository;
+import com.example.bank.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.List;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 @Slf4j
 @Service
@@ -21,6 +28,10 @@ public class CreditCardService {
     private final CreditCardRepository creditCardRepository;
     private final AccountService accountService;
     private final TransactionService transactionService;
+    private final TransactionRepository transactionRepository;
+    // 注入刚创建的 repository
+    private final CreditBillRepository creditBillRepository;
+    private final AccountRepository accountRepository;
 
     /**
      * 1. 信用卡消费 (增加负债)
@@ -110,4 +121,95 @@ public class CreditCardService {
         card.setCreditLimit(newLimit);
         creditCardRepository.save(card);
     }
+
+
+
+    @Transactional(rollbackFor = Exception.class)
+    public void createBillForCard(CreditCard card) {
+        String cycle = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM"));
+
+        // 1. 新增校验：检查是否已存在该卡本月的账单
+        // 你需要在 CreditBillRepository 中定义 findByCardNumberAndBillingCycle
+        boolean exists = creditBillRepository.existsByCardNumberAndBillingCycle(card.getCardNumber(), cycle);
+
+        if (exists) {
+            log.info("卡号 {} 在 {} 账期已出账，跳过生成。", card.getCardNumber(), cycle);
+            return; // 直接返回，不再重复生成
+        }
+
+        // 2. 获取统计范围：从上个月今天到此时此刻
+        LocalDateTime start = LocalDateTime.now().minusMonths(1);
+        LocalDateTime end = LocalDateTime.now();
+
+        // 3. 计算本期消费总额
+        BigDecimal total = transactionRepository.sumMonthConsumption(card.getCardNumber(), start, end);
+        if (total == null) total = BigDecimal.ZERO;
+
+        // 4. 创建并保存账单 (还款日设为出账后20天)
+        CreditBill bill = new CreditBill(
+                card.getCardNumber(),
+                cycle,
+                total,
+                LocalDate.now().plusDays(20)
+        );
+
+        creditBillRepository.save(bill);
+        log.info("用户 {} 的账单已生成，金额: {}", card.getCardNumber(), total);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void handleOverdueBill(CreditBill bill) {
+        // 使用 WithLock 锁定信用卡，防止并发冲突
+        CreditCard card = creditCardRepository.findByCardNumberWithLock(bill.getCardNumber())
+                .orElseThrow(() -> new BusinessException(4003, "未找到关联的信用卡"));
+
+        String repayAccountNo = card.getDefaultRepayAccount();
+        if (repayAccountNo == null || repayAccountNo.isEmpty()) {
+            markAsOverdue(bill);
+            return;
+        }
+
+        try {
+            // 先检查余额，实现“能还多少还多少”
+            // 修改 handleOverdueBill 里的这一行
+            Account account = accountRepository.findByAccountNumber(repayAccountNo)
+                    .orElseThrow(() -> new BusinessException(4003, "还款储蓄账户不存在"));
+            BigDecimal balance = account.getBalance();
+            BigDecimal unpaid = bill.getUnpaidAmount();
+
+            // 实际扣款金额：取余额和欠款的最小值
+            BigDecimal actualDeduct = balance.compareTo(unpaid) >= 0 ? unpaid : balance;
+
+            if (actualDeduct.compareTo(BigDecimal.ZERO) > 0) {
+                accountService.updateBalance(repayAccountNo, actualDeduct.negate());
+
+                bill.setPaidAmount(bill.getPaidAmount().add(actualDeduct));
+                bill.setUnpaidAmount(bill.getUnpaidAmount().subtract(actualDeduct));
+                card.setCurrentDebt(card.getCurrentDebt().subtract(actualDeduct));
+
+                log.info("账单 {} 部分/全部自动扣款成功: {}", bill.getId(), actualDeduct);
+            }
+
+            // 检查是否彻底还清
+            if (bill.getUnpaidAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                bill.setStatus(CreditBill.BillStatus.PAID);
+            } else {
+                markAsOverdue(bill); // 没还清依然算逾期
+            }
+
+        } catch (Exception e) {
+            log.error("自动扣款过程发生异常: {}", e.getMessage());
+            markAsOverdue(bill);
+        }
+
+        creditBillRepository.save(bill);
+        creditCardRepository.save(card);
+    }
+
+    private void markAsOverdue(CreditBill bill) {
+        bill.setStatus(CreditBill.BillStatus.OVERDUE);
+        // 触发动账提醒（WebSocket）
+        transactionService.notifyUser(bill.getCardNumber(), "您的账单已逾期，请及时处理以免影响征信。");
+    }
+
 }

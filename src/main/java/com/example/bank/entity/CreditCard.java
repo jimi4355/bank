@@ -27,4 +27,10 @@ public class CreditCard {
     @OneToOne
     @JoinColumn(name = "user_id")
     private User user; // 关联你的用户实体
+
+    /**
+     * 默认还款账户（储蓄卡号）
+     * 在实际业务中，这应该是用户在开卡或设置自动还款时填写的
+     */
+    private String defaultRepayAccount;
 }
