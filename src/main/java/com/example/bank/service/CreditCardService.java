@@ -1,15 +1,13 @@
 package com.example.bank.service;
 
 
-import com.example.bank.entity.Account;
-import com.example.bank.entity.CreditBill;
-import com.example.bank.entity.CreditCard;
-import com.example.bank.entity.TransactionType;
+import com.example.bank.entity.*;
 import com.example.bank.exception.BusinessException;
 import com.example.bank.repository.AccountRepository;
 import com.example.bank.repository.CreditBillRepository;
 import com.example.bank.repository.CreditCardRepository;
 import com.example.bank.repository.TransactionRepository;
+import com.example.bank.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,6 +30,7 @@ public class CreditCardService {
     // 注入刚创建的 repository
     private final CreditBillRepository creditBillRepository;
     private final AccountRepository accountRepository;
+    private final UserRepository userRepository;
 
     /**
      * 1. 信用卡消费 (增加负债)
@@ -98,16 +97,31 @@ public class CreditCardService {
 
     /**
      * 3. 申请开卡 (初始化)
+     * 增加 userId 参数，并校验实名状态
      */
     @Transactional
-    public CreditCard applyCard(String cardNumber, BigDecimal initialLimit) {
+    public CreditCard applyCard(Long userId, String cardNumber, BigDecimal initialLimit) {
+        // 1. 查找用户并校验实名状态
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(4004, "用户不存在"));
+
+        if (user.getAuthStatus() != User.AuthStatus.VERIFIED) {
+            throw new BusinessException(4008, "请先完成实名认证再尝试开卡");
+        }
+
+        // 2. 初始化卡片信息
         CreditCard card = new CreditCard();
         card.setCardNumber(cardNumber);
         card.setCreditLimit(initialLimit);
         card.setCurrentDebt(BigDecimal.ZERO);
-        card.setBillingDate(5);  // 默认每月5号出账单
-        card.setDueDate(25);     // 默认每月25号还款
+        card.setBillingDate(5);
+        card.setDueDate(25);
         card.setStatus("NORMAL");
+
+        // 3. 关联用户 (假设你的 CreditCard 实体中有 userId 字段)
+        card.setUserId(userId);
+
+        log.info("用户 {} (实名: {}) 成功申领信用卡: {}", userId, user.getRealName(), cardNumber);
         return creditCardRepository.save(card);
     }
 

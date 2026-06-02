@@ -23,9 +23,6 @@ public interface CreditCardRepository extends JpaRepository<CreditCard, Long> {
 
     /**
      * 根据用户 ID 查询名下的信用卡
-     * 一个用户可能有多张卡
-     */
-    /**
      * 修改为 List，因为一个用户可以拥有多张信用卡
      */
     List<CreditCard> findAllByUserId(Long userId);
@@ -46,7 +43,7 @@ public interface CreditCardRepository extends JpaRepository<CreditCard, Long> {
      * 其他线程必须等待当前事务完成才能读取/修改这行数据
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @QueryHints({@QueryHint(name = "javax.persistence.lock.timeout", value = "3000")}) // 等待3秒，拿不到锁就抛异常
+    @QueryHints({@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000")})// 等待3秒，拿不到锁就抛异常
     @Query("SELECT c FROM CreditCard c WHERE c.cardNumber = :cardNumber")
     Optional<CreditCard> findByCardNumberWithLock(String cardNumber);
 

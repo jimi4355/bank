@@ -1,13 +1,11 @@
 package com.example.bank.controller;
 
+import com.example.bank.dto.CreditCardApplyDTO;
 import com.example.bank.dto.Result;
 import com.example.bank.entity.CreditCard;
 import com.example.bank.service.CreditCardService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 
@@ -36,7 +34,11 @@ public class CreditCardController {
 
     // 3. 申请开卡
     @PostMapping("/apply")
-    public Result<CreditCard> apply(@RequestParam String cardNumber, @RequestParam BigDecimal limit) {
-        return Result.success(creditCardService.applyCard(cardNumber, limit));
+    public Result<CreditCard> apply(@RequestBody CreditCardApplyDTO dto) {
+        return Result.success(creditCardService.applyCard(
+                dto.getUserId(),
+                dto.getCardNumber(),
+                dto.getLimit()
+        ));
     }
 }
